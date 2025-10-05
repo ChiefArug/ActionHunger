@@ -2,13 +2,9 @@ package com.minenash.action_hunger.mixin;
 
 import com.minenash.action_hunger.ActionHunger;
 import com.minenash.action_hunger.config.Config;
-import net.minecraft.entity.damage.DamageSource;
-import net.minecraft.entity.damage.DamageSources;
 import net.minecraft.entity.player.HungerManager;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Items;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registries;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.GameRules;
 import org.spongepowered.asm.mixin.Mixin;
@@ -45,12 +41,13 @@ public abstract class HungerManagerMixin {
     @Overwrite
     public void update(PlayerEntity player) {
         Difficulty difficulty = player.getWorld().getDifficulty();
-        if (exhaustion > 4.0F) {
-            exhaustion -= 4.0F;
-            if (saturationLevel > 0.0F)
-                saturationLevel = Math.max(saturationLevel - 1.0F, 0.0F);
-            else if (difficulty != Difficulty.PEACEFUL)
-                foodLevel = Math.max(foodLevel - 1, 0);
+        if (this.exhaustion > 4.0F) {
+            this.exhaustion -= 4.0F;
+            if (this.saturationLevel > 0.0F) {
+                this.saturationLevel = Math.max(this.saturationLevel - 1.0F, 0.0F);
+            } else if (difficulty != Difficulty.PEACEFUL) {
+                this.foodLevel = Math.max(this.foodLevel - 1, 0);
+            }
         }
 
         if (player.getAbilities().invulnerable)
@@ -58,80 +55,80 @@ public abstract class HungerManagerMixin {
 
         double dynamicRegenRateModifier = ActionHunger.getCurveModifier(player.getHealth(), Config.dynamicRegenRateCurve, Config.dynamicRegenRateMultiplier);
 
-        boolean regened = false;
 
         boolean isPlayerUsingShield = player.getActiveItem().getItem() == Items.SHIELD;
 
         if (isPlayerUsingShield) {
-            ++shieldExhaustionTimer;
-            if (shieldExhaustionTimer >= Config.shieldExhaustionRate)
-                exhaustion("Shield", Config.shieldExhaustionAmount);
-        }
-        else
-            shieldExhaustionTimer = 0;
+            ++this.shieldExhaustionTimer;
+            if (this.shieldExhaustionTimer >= Config.shieldExhaustionRate) {
+                if (Config.debug)
+                    System.out.println("Exhaustion from " + "Shield" + ": " + Config.shieldExhaustionAmount);
+                this.addExhaustion(Config.shieldExhaustionAmount);
+            }
+        } else
+            this.shieldExhaustionTimer = 0;
+
+        boolean regened = true;
 
         boolean blockRegenFromShield = Config.disableRegenWhenUsingShield && isPlayerUsingShield;
-        if (player.getWorld().getGameRules().getBoolean(GameRules.NATURAL_REGENERATION) && !blockRegenFromShield)
-            regened = regen(player, dynamicRegenRateModifier);
+        boolean bl = player.getWorld().getGameRules().getBoolean(GameRules.NATURAL_REGENERATION);
+        if (bl && !blockRegenFromShield) {
+            constantRegenTimer++;
+            if (constantRegenTimer >= Config.constantRegenRate * (Config.dynamicRegenOnConstantRegen ? dynamicRegenRateModifier : 1.0D)) {
+                if (Config.debug)
+                    System.out.println("Heal from " + "Const" + ": " + Config.constantRegenAmount);
+                player.heal(Config.constantRegenAmount);
+                constantRegenTimer = 0;
+            }
 
-        constantHungerTimer++;
-        if (constantHungerTimer >= Config.constantExhaustionRate * (Config.dynamicRegenOnConstantExhaustion ? dynamicRegenRateModifier : 1.0D)) {
-            exhaustion("Const", Config.constantExhaustionAmount);
-            constantHungerTimer = 0;
+            if (this.saturationLevel > 0.0F && player.canFoodHeal() && this.foodLevel >= Config.hyperFoodRegenMinimumHunger) {
+                ++this.foodTickTimer;
+                if (this.foodTickTimer >= Config.hyperFoodRegenRate * (Config.dynamicRegenOnHyperFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
+                    float f = Math.min(this.saturationLevel, 6.0F);
+                    if (Config.debug)
+                        System.out.println("Heal from " + "Hyper" + ": " + f / 6.0F * Config.hyperFoodRegenHealthMultiplier);
+                    player.heal(f / 6.0F * Config.hyperFoodRegenHealthMultiplier);
+                    if (Config.debug)
+                        System.out.println("Exhaustion from " + "Hyper" + ": " + f * Config.hyperFoodRegenExhaustionMultiplier);
+                    this.addExhaustion(f * Config.hyperFoodRegenExhaustionMultiplier);
+                    this.foodTickTimer = 0;
+                }
+            } else if (this.foodLevel >= Config.foodRegenMinimumHunger && player.canFoodHeal()) {
+                ++this.foodTickTimer;
+                if (this.foodTickTimer >= Config.foodRegenRate * (Config.dynamicRegenOnFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
+                    if (Config.debug)
+                        System.out.println("Heal from " + "Food" + ": " + Config.foodRegenHealthAmount);
+                    player.heal(Config.foodRegenHealthAmount);
+                    if (Config.debug)
+                        System.out.println("Exhaustion from " + "Food" + ": " + Config.foodRegenExhaustionAmount);
+                    this.addExhaustion(Config.foodRegenExhaustionAmount);
+                    this.foodTickTimer = 0;
+                }
+            } else {
+                regened = false;
+            }
         }
 
-        if (foodLevel <= 0) {
-            ++foodTickTimer;
-            if (foodTickTimer >= Config.starvationDamageRate) {
+        this.constantHungerTimer++;
+        if (this.constantHungerTimer >= Config.constantExhaustionRate * (Config.dynamicRegenOnConstantExhaustion ? dynamicRegenRateModifier : 1.0D)) {
+            if (Config.debug)
+                System.out.println("Exhaustion from " + "Const" + ": " + Config.constantExhaustionAmount);
+            this.addExhaustion(Config.constantExhaustionAmount);
+            this.constantHungerTimer = 0;
+        }
+
+        if (this.foodLevel <= 0) {
+            ++this.foodTickTimer;
+            if (this.foodTickTimer >= Config.starvationDamageRate) {
                 if (player.getHealth() > 10.0F || difficulty == Difficulty.HARD || player.getHealth() > 1.0F && difficulty == Difficulty.NORMAL)
                     player.damage(player.getDamageSources().starve(), Config.starvationDamageAmount);
-                foodTickTimer = 0;
+                this.foodTickTimer = 0;
             }
         } else if (!regened){
-            foodTickTimer = 0;
+            this.foodTickTimer = 0;
         }
 
     }
 
-    private boolean regen(PlayerEntity player, double dynamicRegenRateModifier) {
-        constantRegenTimer++;
-        if (constantRegenTimer >= Config.constantRegenRate * (Config.dynamicRegenOnConstantRegen ? dynamicRegenRateModifier : 1.0D)) {
-            heal(player, "Const", Config.constantRegenAmount);
-            constantRegenTimer = 0;
-        }
-
-        if (saturationLevel > 0.0F && player.canFoodHeal() && foodLevel >= Config.hyperFoodRegenMinimumHunger) {
-            ++foodTickTimer;
-            if (foodTickTimer >= Config.hyperFoodRegenRate * (Config.dynamicRegenOnHyperFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
-                float f = Math.min(saturationLevel, 6.0F);
-                heal(player, "Hyper", f / 6.0F * Config.hyperFoodRegenHealthMultiplier);
-                exhaustion("Hyper", f * Config.hyperFoodRegenExhaustionMultiplier);
-                foodTickTimer = 0;
-            }
-        } else if (foodLevel >= Config.foodRegenMinimumHunger && player.canFoodHeal()) {
-            ++foodTickTimer;
-            if (foodTickTimer >= Config.foodRegenRate * (Config.dynamicRegenOnFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
-                heal(player, "Food", Config.foodRegenHealthAmount);
-                exhaustion("Food", Config.foodRegenExhaustionAmount);
-                foodTickTimer = 0;
-            }
-        }
-        else
-            return false;
-        return true;
-    }
-
-
-    private void heal(PlayerEntity player, String source, float amount) {
-        if (Config.debug)
-            System.out.println("Heal from " + source + ": " + amount);
-        player.heal(amount);
-    }
-
-    private void exhaustion(String source, float amount) {
-        if (Config.debug)
-            System.out.println("Exhaustion from " + source + ": " + amount);
-        addExhaustion(amount);
-    }
 
 }
