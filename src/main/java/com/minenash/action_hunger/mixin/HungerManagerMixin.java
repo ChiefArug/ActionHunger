@@ -63,7 +63,7 @@ public abstract class HungerManagerMixin {
             method = "update",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/world/GameRules;getBoolean(Lnet/minecraft/world/GameRules$Key;)Z"),
             cancellable = true,
-            order = 999 // go before shield exhaustion TODO: CONFIRM THIS
+            order = 999 // go before shield exhaustion
     )
     private void actionHunger$earlyExitIfInvuln(PlayerEntity player, CallbackInfo ci) {
         if (player.getAbilities().invulnerable)
