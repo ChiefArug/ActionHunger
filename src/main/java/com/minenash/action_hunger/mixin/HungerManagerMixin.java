@@ -57,12 +57,8 @@ public abstract class HungerManagerMixin {
         if (player.getAbilities().invulnerable)
             return;
 
-        double dynamicRegenRateModifier = ActionHunger.getCurveModifier(player.getHealth(), Config.dynamicRegenRateCurve, Config.dynamicRegenRateMultiplier);
 
-
-        boolean isPlayerUsingShield = player.getActiveItem().getItem() == Items.SHIELD;
-
-        if (isPlayerUsingShield) {
+        if (isIsPlayerUsingShield(player)) {
             ++this.shieldExhaustionTimer;
             if (this.shieldExhaustionTimer >= Config.shieldExhaustionRate) {
                 if (Config.debug)
@@ -74,11 +70,10 @@ public abstract class HungerManagerMixin {
 
         boolean regened = true;
 
-        boolean blockRegenFromShield = Config.disableRegenWhenUsingShield && isPlayerUsingShield;
         boolean bl = player.getWorld().getGameRules().getBoolean(GameRules.NATURAL_REGENERATION);
-        if (bl && !blockRegenFromShield) {
+        if (bl && !shouldBlockRegenFromShield(player)) {
             constantRegenTimer++;
-            if (constantRegenTimer >= Config.constantRegenRate * (Config.dynamicRegenOnConstantRegen ? dynamicRegenRateModifier : 1.0D)) {
+            if (constantRegenTimer >= Config.constantRegenRate * (Config.dynamicRegenOnConstantRegen ? getCurveModifier(player) : 1.0D)) {
                 if (Config.debug)
                     System.out.println("Heal from " + "Const" + ": " + Config.constantRegenAmount);
                 player.heal(Config.constantRegenAmount);
@@ -87,7 +82,7 @@ public abstract class HungerManagerMixin {
 
             if (this.saturationLevel > 0.0F && player.canFoodHeal() && this.foodLevel >= Config.hyperFoodRegenMinimumHunger) {
                 ++this.foodTickTimer;
-                if (this.foodTickTimer >= Config.hyperFoodRegenRate * (Config.dynamicRegenOnHyperFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
+                if (this.foodTickTimer >= Config.hyperFoodRegenRate * (Config.dynamicRegenOnHyperFoodRegen ? getCurveModifier(player) : 1.0D)) {
                     float f = Math.min(this.saturationLevel, 6.0F);
                     if (Config.debug)
                         System.out.println("Heal from " + "Hyper" + ": " + f / 6.0F * Config.hyperFoodRegenHealthMultiplier);
@@ -99,7 +94,7 @@ public abstract class HungerManagerMixin {
                 }
             } else if (this.foodLevel >= Config.foodRegenMinimumHunger && player.canFoodHeal()) {
                 ++this.foodTickTimer;
-                if (this.foodTickTimer >= Config.foodRegenRate * (Config.dynamicRegenOnFoodRegen ? dynamicRegenRateModifier : 1.0D)) {
+                if (this.foodTickTimer >= Config.foodRegenRate * (Config.dynamicRegenOnFoodRegen ? getCurveModifier(player) : 1.0D)) {
                     if (Config.debug)
                         System.out.println("Heal from " + "Food" + ": " + Config.foodRegenHealthAmount);
                     player.heal(Config.foodRegenHealthAmount);
@@ -114,7 +109,7 @@ public abstract class HungerManagerMixin {
         }
 
         this.constantHungerTimer++;
-        if (this.constantHungerTimer >= Config.constantExhaustionRate * (Config.dynamicRegenOnConstantExhaustion ? dynamicRegenRateModifier : 1.0D)) {
+        if (this.constantHungerTimer >= Config.constantExhaustionRate * (Config.dynamicRegenOnConstantExhaustion ? getCurveModifier(player) : 1.0D)) {
             if (Config.debug)
                 System.out.println("Exhaustion from " + "Const" + ": " + Config.constantExhaustionAmount);
             this.addExhaustion(Config.constantExhaustionAmount);
@@ -132,6 +127,22 @@ public abstract class HungerManagerMixin {
             this.foodTickTimer = 0;
         }
 
+    }
+
+    @Unique
+    private static double getCurveModifier(PlayerEntity player) {
+        return ActionHunger.getCurveModifier(player.getHealth(), Config.dynamicRegenRateCurve, Config.dynamicRegenRateMultiplier);
+    }
+
+
+    @Unique
+    private static boolean isIsPlayerUsingShield(PlayerEntity player) {
+        return player.getActiveItem().getItem() == Items.SHIELD;
+    }
+
+    @Unique
+    private static boolean shouldBlockRegenFromShield(PlayerEntity player) {
+        return Config.disableRegenWhenUsingShield && isIsPlayerUsingShield(player);
     }
 
 
